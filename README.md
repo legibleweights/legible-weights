@@ -1,27 +1,49 @@
 # legible-weights
 
-Interpretability research on small open-weight language models.
+Interpretability research on small open-weight language models. Umbrella for
+a thread of small, focused empirical projects, each living in its own
+project repo with a single falsifiable claim and a public, reproducible
+artifact.
 
-Most public SAE and feature-dictionary work targets a handful of specific models
-at the 7B+ scale. This project trains and publishes dictionaries for smaller
-open-weight models (0.5B–3B), where iteration is fast and ablations are cheap,
-and uses them to trace specific behaviors back to specific weights.
+## Projects
 
-## Output
+| repo                                                                            | one-line claim                                                                             |
+|----------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------|
+| [diffusion-vs-ar-saes](https://github.com/legibleweights/diffusion-vs-ar-saes)   | At matched scale and corpus, 55 % of MDLM SAE features have a GPT-2 SAE counterpart at activation-correlation r > 0.30, despite cross-decoder cosine ~ 0 — the two paradigms build the same concepts in different coordinate systems. |
+| [sae-under-quantization](https://github.com/legibleweights/sae-under-quantization) | A fp16-trained TopK SAE on Qwen2.5-0.5B L9 transfers losslessly to int8 (99.96 % features stable at r > 0.9) and near-losslessly to nf4 (87.4 %, 0 deaths); SAE-spliced CE recovery unchanged at 0.98. |
 
-- **Sparse autoencoders** for residual-stream and MLP-output activations across
-  small open-weight LLMs (Qwen2.5, Llama 3.2, Gemma 2 at ≤3B parameters).
-  Checkpoints are released under the HuggingFace organization
-  [legible-weights](https://huggingface.co/legible-weights).
-- **Monthly writeups** that pick one concrete model behavior and trace it
-  through the dictionary to the specific features (and weights) that cause it.
-- **Tooling** for loading dictionaries, browsing features, and running
-  attribution experiments.
+## SAE checkpoints (HuggingFace)
+
+All artifacts live under the [`legible-weights` HF organization](https://huggingface.co/legible-weights):
+
+- [`sae-qwen2.5-0.5b-l9`](https://huggingface.co/legible-weights/sae-qwen2.5-0.5b-l9) (v0.1 baseline, v0.2 outlier-aware) — the foundational Qwen2.5-0.5B SAE
+- [`sae-gpt2-small-l6-v0.1`](https://huggingface.co/legible-weights/sae-gpt2-small-l6-v0.1) — from [diffusion-vs-ar-saes](https://github.com/legibleweights/diffusion-vs-ar-saes)
+- [`sae-mdlm-owt-l6-v0.1`](https://huggingface.co/legible-weights/sae-mdlm-owt-l6-v0.1) — from [diffusion-vs-ar-saes](https://github.com/legibleweights/diffusion-vs-ar-saes)
+
+## What's in this repo
+
+This repo contains the **foundational Qwen2.5-0.5B SAE training and feature-
+inspection work**, plus the shared library code (TopK SAE, training loop,
+activation collection, model adapters, eval / CE recovery, feature
+inspection) that the project repos vendor in.
+
+- `src/legible_weights/` — the shared library
+- `experiments/qwen2_5_0_5b/` — original Qwen2.5-0.5B v0.1 and v0.2 SAE
+  training, feature inspection, and the outlier-position-trap finding
+  (NOTES.md)
+
+When a sub-project matures past v0.1 — e.g. when it has its own narrative
+arc, paper, or sustained release cycle — it gets spun out into its own repo
+listed above. Vendored copies of the shared library go with it so each
+project repo is self-contained and reproducible without depending on the
+umbrella.
 
 ## Status
 
-Pre-v0.1. Repository scaffolding only — no trained dictionaries yet.
+Pre-release. The two project repos above are the substantive output so far;
+this umbrella is the index + library + the original v0.1/v0.2 Qwen2.5-0.5B
+work.
 
 ## License
 
-MIT. See `LICENSE`.
+MIT.
