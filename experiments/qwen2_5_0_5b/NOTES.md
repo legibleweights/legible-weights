@@ -14,32 +14,46 @@ residual stream of `Qwen/Qwen2.5-0.5B`.
 | epochs           | 4         |
 | batch_size       | 4096      |
 | lr               | 5e-4      |
-| final MSE        | 0.093     |
-| final EV         | 0.988     |
-| final L0         | 32        |
 | wall time        | ~40 s on 1× RTX 4090 |
 
 Checkpoint: [legible-weights/sae-qwen2.5-0.5b-l9](https://huggingface.co/legible-weights/sae-qwen2.5-0.5b-l9)
 
-### What this run does and does not tell us
+### Training metrics (final step)
 
-- It tells us the pipeline runs end-to-end: hook capture, activation buffer,
-  TopK forward, decoder renormalization, save/load round-trip.
-- It does **not** tell us we have a usable feature dictionary. EV 0.988 on
-  1M tokens almost certainly reflects memorization of the activation
-  distribution rather than learned features. A meaningful run needs ≥100M
-  tokens and the EV-vs-step curve should show extended plateau behavior.
+- MSE 0.093, EV 0.988, L0 32.
+
+### Held-out evaluation (100k fresh tokens from a later slice of FineWeb-Edu)
+
+| metric                          | value           |
+|---------------------------------|-----------------|
+| MSE                             | 0.103           |
+| Explained variance              | 0.987           |
+| L0 (mean ± std)                 | 32.0 ± 0.0      |
+| Dead features                   | 6 / 14336 (0.04%) |
+| CE clean (no intervention)      | 2.709           |
+| CE w/ SAE reconstruction spliced| 3.119 (+0.410)  |
+| CE w/ mean-activation baseline  | 10.910          |
+| **CE recovered**                | **0.950**       |
+
+Held-out EV essentially matches training EV → not overfit. CE recovery of
+**0.950** is the load-bearing number: splicing the SAE's reconstruction in
+place of the real layer-9 residual stream costs only 5% of the next-token
+predictive signal that the model would otherwise have. For a 1M-token, 16×
+expansion, k=32 SAE on a 0.5B model this is unexpectedly usable — earlier
+note in this file calling it a "memorization artifact" was wrong, the eval
+demonstrably refutes it.
 
 ### Next steps
 
-- [ ] Scale to 100M tokens — at 60k tok/s collection speed, that's ~30 min
-      of data collection. Buffer would be ~180 GB in fp16, so collection
-      needs to be streamed-to-disk (zarr or memmap) rather than held in RAM.
-- [ ] Run a held-out reconstruction eval on a fresh sample of tokens to
-      separate train-set memorization from generalization.
-- [ ] Compute dead-feature counts (how many of the 14336 features never fire
-      across the validation set) — for TopK this should be near zero with
-      proper decoder renormalization, but worth verifying.
-- [ ] Browse a handful of features by activation strength and check whether
-      they look like coherent concepts. If they don't, that's a signal the
-      token budget is still too small.
+- [ ] Scale to 50–100M tokens with streamed-to-disk activations (180GB fp16
+      buffer doesn't fit RAM, so memmap on the NVMe). Goal: push CE recovery
+      above 0.97 and harden against any remaining variance from data slice.
+- [ ] Inspect top features: pick 8–10 high-firing features and find the
+      top-k activating tokens for each. If they cluster into coherent
+      concepts (a date format, a code construct, a sentiment polarity) we
+      have something publishable. If they look like noise, the smoke is
+      not as good as the metrics suggest.
+- [ ] Replicate on layer 5 and layer 15 to compare mid-vs-late residual
+      streams; pick the most interpretable layer for the first blog post.
+- [ ] Train an MLP-output SAE (vs. residual-stream) at the same layer for a
+      coverage comparison.
