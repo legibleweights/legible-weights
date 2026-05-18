@@ -52,7 +52,8 @@ def collect_activations(
     exclude_first_n: int = 0,
     adapter: ModelAdapter = QWEN_LLAMA,
     shuffle: bool = True,
-) -> torch.Tensor:
+    return_positions: bool = False,
+) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
     """Stream `texts` through the model, capturing layer_idx residual stream.
 
     Returns a tensor of shape (n_tokens, d_model), fp16, on CPU. Caller is
@@ -66,9 +67,14 @@ def collect_activations(
     `adapter` controls model-family-specific behavior (layer access path,
     output unwrapping, forward signature). Defaults to the Qwen/Llama/Gemma
     layout for backward compatibility with prior experiments.
+
+    If `return_positions=True`, also returns a (n_tokens,) int tensor giving
+    each token's original position within its sequence. Required for
+    position-aware SAEs that condition on position.
     """
     d_model = _infer_d_model(model)
     buf = torch.empty((n_tokens, d_model), dtype=torch.float16)
+    pos_buf = torch.empty((n_tokens,), dtype=torch.int32) if return_positions else None
     filled = 0
 
     captured: list[torch.Tensor] = []
@@ -106,6 +112,11 @@ def collect_activations(
             valid = hs[mask]  # (n_valid_tokens, D)
             take = min(valid.shape[0], n_tokens - filled)
             buf[filled : filled + take] = valid[:take]
+            if pos_buf is not None:
+                # Per-position index broadcast across batch, then masked the same way
+                pos_grid = torch.arange(hs.size(1)).unsqueeze(0).expand(hs.size(0), -1)
+                valid_pos = pos_grid[mask]
+                pos_buf[filled : filled + take] = valid_pos[:take].to(torch.int32)
             filled += take
             pbar.update(take)
             batch = []
@@ -114,7 +125,13 @@ def collect_activations(
         handle.remove()
 
     buf = buf[:filled]
+    if pos_buf is not None:
+        pos_buf = pos_buf[:filled]
     if shuffle:
         perm = torch.randperm(buf.shape[0])
         buf = buf[perm]
+        if pos_buf is not None:
+            pos_buf = pos_buf[perm]
+    if pos_buf is not None:
+        return buf, pos_buf
     return buf

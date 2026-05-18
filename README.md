@@ -11,6 +11,7 @@ artifact.
 |----------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------|
 | [diffusion-vs-ar-saes](https://github.com/legibleweights/diffusion-vs-ar-saes)   | At matched scale and corpus, 55 % of MDLM SAE features have a GPT-2 SAE counterpart at activation-correlation r > 0.30, despite cross-decoder cosine ~ 0 — the two paradigms build the same concepts in different coordinate systems. |
 | [sae-under-quantization](https://github.com/legibleweights/sae-under-quantization) | A fp16-trained TopK SAE on Qwen2.5-0.5B L9 transfers losslessly to int8 (99.96 % features stable at r > 0.9) and near-losslessly to nf4 (87.4 %, 0 deaths); SAE-spliced CE recovery unchanged at 0.98. |
+| [small-sae-bench](https://github.com/legibleweights/small-sae-bench) | A per-position pre-bias variant of TopK SAE extends usable reconstruction to positions 0–3 (where vanilla TopK is catastrophic, EV −0.07) at a 3-point EV cost on mid-sequence positions, removing the need for `exclude_first_n` in training. |
 
 ## SAE checkpoints (HuggingFace)
 
