@@ -81,6 +81,7 @@ def ce_recovery(
     device: str | torch.device = "cuda",
     mean_activation: torch.Tensor | None = None,
     exclude_first_n: int = 0,
+    position_aware: bool = False,
 ) -> RecoveryResult:
     """Compute CE recovery on a held-out text iterator.
 
@@ -113,14 +114,26 @@ def ce_recovery(
         pbar_collect.update(1)
     pbar_collect.close()
 
-    # Estimate mean activation if not provided — use sae.pre_bias as a proxy
+    # Estimate mean activation if not provided — use sae.pre_bias as a proxy.
+    # Position-aware SAEs don't have a single pre_bias; fall back to a zero
+    # vector (later replaced by the dataset mean computed from the first batch).
     if mean_activation is None:
-        mean_activation = sae.pre_bias.detach().to(device)
+        if hasattr(sae, "pre_bias"):
+            mean_activation = sae.pre_bias.detach().to(device)
+        elif hasattr(sae, "pre_bias_default"):
+            mean_activation = sae.pre_bias_default.detach().to(device)
+        else:
+            mean_activation = torch.zeros(model.config.hidden_size, device=device)
     mean_activation = mean_activation.to(device)
 
     def sae_replace(hs: torch.Tensor) -> torch.Tensor:
-        flat = hs.reshape(-1, hs.size(-1)).to(torch.float32)
-        recon, _ = sae(flat)
+        B, L, D = hs.shape
+        flat = hs.reshape(-1, D).to(torch.float32)
+        if position_aware:
+            pos = torch.arange(L, device=hs.device).unsqueeze(0).expand(B, L).reshape(-1)
+            recon, _ = sae(flat, pos)
+        else:
+            recon, _ = sae(flat)
         recon = recon.reshape(hs.shape).to(hs.dtype)
         if exclude_first_n > 0:
             # Keep original activations on positions the SAE was not trained on
