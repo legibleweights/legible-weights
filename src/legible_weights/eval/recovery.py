@@ -80,6 +80,7 @@ def ce_recovery(
     seq_len: int = 512,
     device: str | torch.device = "cuda",
     mean_activation: torch.Tensor | None = None,
+    exclude_first_n: int = 0,
 ) -> RecoveryResult:
     """Compute CE recovery on a held-out text iterator.
 
@@ -120,10 +121,18 @@ def ce_recovery(
     def sae_replace(hs: torch.Tensor) -> torch.Tensor:
         flat = hs.reshape(-1, hs.size(-1)).to(torch.float32)
         recon, _ = sae(flat)
-        return recon.reshape(hs.shape).to(hs.dtype)
+        recon = recon.reshape(hs.shape).to(hs.dtype)
+        if exclude_first_n > 0:
+            # Keep original activations on positions the SAE was not trained on
+            recon = recon.clone()
+            recon[:, :exclude_first_n] = hs[:, :exclude_first_n]
+        return recon
 
     def mean_replace(hs: torch.Tensor) -> torch.Tensor:
-        return mean_activation.to(hs.dtype).expand_as(hs)
+        out = mean_activation.to(hs.dtype).expand_as(hs).clone()
+        if exclude_first_n > 0:
+            out[:, :exclude_first_n] = hs[:, :exclude_first_n]
+        return out
 
     sums = {"clean": 0.0, "recon": 0.0, "zero": 0.0}
     counts = {"clean": 0, "recon": 0, "zero": 0}

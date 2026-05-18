@@ -97,7 +97,9 @@ def main() -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     cfg = json.loads((args.checkpoint / "config.json").read_text())
-    print(f"[eval] checkpoint config: layer={cfg['layer']}, base={cfg['base_model']}")
+    exclude_first_n = int(cfg.get("training", {}).get("exclude_first_n", 0))
+    print(f"[eval] checkpoint config: layer={cfg['layer']}, base={cfg['base_model']}, "
+          f"exclude_first_n={exclude_first_n}")
 
     sae_cfg = SAEConfig(
         d_in=cfg["sae"]["d_in"],
@@ -137,6 +139,7 @@ def main() -> None:
         seq_len=args.seq_len,
         batch_size=8,
         device=device,
+        exclude_first_n=exclude_first_n,
     )
     print(f"[eval] held-out activations: {activations.shape}")
 
@@ -157,6 +160,7 @@ def main() -> None:
         batch_size=args.ce_batch_size,
         seq_len=args.seq_len,
         device=device,
+        exclude_first_n=exclude_first_n,
     )
     print(f"[eval] CE: clean={rec.ce_clean:.3f} recon={rec.ce_recon:.3f} "
           f"zero={rec.ce_zero:.3f} recovered={rec.recovered:.3f}")

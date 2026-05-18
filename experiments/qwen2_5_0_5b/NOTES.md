@@ -1,5 +1,77 @@
 # Qwen2.5-0.5B — SAE training notes
 
+## v0.2 (2026-05-18)
+
+Same architecture as v0.1-smoke (TopK, d_hidden 14336, k 32). Two changes:
+
+1. **10× more tokens**: 10,000,000 vs 1,000,000.
+2. **`exclude_first_n=4`**: positions 0–3 of every sequence are skipped
+   during activation collection. This is the workaround for the outlier-
+   position trap documented in the v0.1-smoke section below.
+
+### Training
+
+10M tokens collected in 151.9 s (~65 k tok/s). 9,750 training steps in
+206 s (~50 it/s). Total wall time ~6 min on the 4090. Training-side metrics
+at the final step: MSE 0.032, EV 0.851, L0 32.
+
+### Held-out evaluation (100k fresh tokens, position-aware splice)
+
+The `eval_sae` and `recovery` modules were updated to read `exclude_first_n`
+from `config.json` and apply matching position masking — both for held-out
+activation collection (reconstruction metrics) and for the CE-recovery
+splice intervention (the SAE's reconstruction replaces real activations only
+at positions ≥ N; positions 0..N-1 pass through unchanged).
+
+| metric                          | v0.1            | **v0.2**        |
+|---------------------------------|-----------------|-----------------|
+| MSE                             | 0.103           | **0.032**       |
+| Explained variance              | 0.987           | 0.849           |
+| Dead features                   | 6 / 14336       | 115 / 14336     |
+| CE clean                        | 2.709           | 2.709           |
+| CE w/ SAE spliced               | 3.119 (+0.410)  | **2.844 (+0.135)** |
+| CE w/ mean baseline             | 10.910          | 9.520           |
+| **CE recovered**                | 0.950           | **0.980**       |
+
+The EV drop is expected and not a regression. v0.1's high EV was being
+earned mostly by reconstructing high-norm outlier positions, which v0.2
+deliberately doesn't see. CE recovery is the load-bearing comparison —
+v0.2 cuts the loss-in-nats induced by the splice by **3×** (0.410 → 0.135).
+
+### Feature inspection
+
+`features_v0.2.md` lists the top 16 features. Concrete improvements over
+v0.1 (excl-first-4 inspection, since that is the fair comparison):
+
+| feature | hypothesis                                                 |
+|---------|------------------------------------------------------------|
+| 9059    | `,` in coordinating / list contexts (one clean comma feature, not split) |
+| 8809    | Title-case capitalized noun (`Become`, `Specialist`, etc.) |
+| 8148    | Paragraph-initial / topical-start token                    |
+| 11548   | ` a` indefinite article (new — not in v0.1)                |
+| 9401    | ` is` copula                                               |
+| 4973    | ` of` in noun-phrase post-modifiers                        |
+| 6890    | `.` sentence-end period (distinct from v0.1's `.↵`)        |
+| 207     | Morphological suffix family (`S`, `iers`, `ages`)          |
+| 456     | Morphological suffix family (`ic`, `ive`, `ian`, `id`)     |
+| 6461    | Memorized Rosa Parks passage (still present but weaker)    |
+
+Multiple ` the` features still exist (6942, 11827), suggesting partial
+dictionary splits that more tokens could merge. The memorized-passage
+feature is weaker than v0.1's, which is the expected effect of more diverse
+training data.
+
+### Next steps
+
+- [ ] Try `exclude_first_n=8` and `=16` to see if there's a sweet spot.
+- [ ] Train a v0.3 at 50M tokens with disk-buffered activations. Goal:
+      push CE recovery past 0.99 and reduce the `the` / `,` redundancy.
+- [ ] Replicate on layer 5 and layer 15 to compare mid-vs-late residual
+      streams.
+- [ ] Train an MLP-output SAE at the same layer for a coverage comparison.
+
+---
+
 ## v0.1-smoke (2026-05-18)
 
 First end-to-end pipeline verification. Trained a TopK SAE on the layer 9

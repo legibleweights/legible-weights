@@ -44,11 +44,17 @@ def collect_activations(
     seq_len: int = 512,
     batch_size: int = 8,
     device: str | torch.device = "cuda",
+    exclude_first_n: int = 0,
 ) -> torch.Tensor:
     """Stream `texts` through the model, capturing layer_idx residual stream.
 
     Returns a tensor of shape (n_tokens, d_model), fp16, on CPU. Caller is
     responsible for moving batches to GPU during SAE training.
+
+    If `exclude_first_n > 0`, the first N token positions of each sequence are
+    treated as padding (not collected). This is the standard workaround for
+    transformer attention-sink / outlier-position effects, where the first few
+    positions have anomalously high residual-stream norm.
     """
     d_model = model.config.hidden_size
     buf = torch.empty((n_tokens, d_model), dtype=torch.float16)
@@ -84,7 +90,9 @@ def collect_activations(
             captured.clear()
             model(**enc)
             hs = captured[0]  # (B, L, D)
-            mask = enc.attention_mask.cpu().bool()
+            mask = enc.attention_mask.cpu().bool().clone()
+            if exclude_first_n > 0:
+                mask[:, :exclude_first_n] = False
             valid = hs[mask]  # (n_valid_tokens, D)
             take = min(valid.shape[0], n_tokens - filled)
             buf[filled : filled + take] = valid[:take]

@@ -37,6 +37,9 @@ def main() -> None:
         default=Path("checkpoints/sae-qwen2.5-0.5b-l9"),
     )
     ap.add_argument("--smoke", action="store_true", help="Use a tiny dataset slice")
+    ap.add_argument("--exclude-first-n", type=int, default=0,
+                    help="Skip the first N positions of each sequence during activation "
+                         "collection (workaround for outlier-position dominance)")
     args = ap.parse_args()
 
     torch.manual_seed(args.seed)
@@ -66,6 +69,7 @@ def main() -> None:
         seq_len=args.seq_len,
         batch_size=8,
         device=device,
+        exclude_first_n=args.exclude_first_n,
     )
     print(f"[data] collected {activations.shape} in {time.time() - t0:.1f}s")
 
@@ -110,6 +114,7 @@ def main() -> None:
                     "n_epochs": args.epochs,
                     "seed": args.seed,
                     "dataset": "HuggingFaceFW/fineweb-edu:sample-10BT",
+                    "exclude_first_n": args.exclude_first_n,
                 },
             },
             indent=2,
