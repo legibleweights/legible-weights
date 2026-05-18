@@ -19,7 +19,7 @@ residual stream of `Qwen/Qwen2.5-0.5B`.
 | final L0         | 32        |
 | wall time        | ~40 s on 1× RTX 4090 |
 
-Checkpoint: [Legiblex/sae-qwen2.5-0.5b-l9](https://huggingface.co/Legiblex/sae-qwen2.5-0.5b-l9)
+Checkpoint: [legible-weights/sae-qwen2.5-0.5b-l9](https://huggingface.co/legible-weights/sae-qwen2.5-0.5b-l9)
 
 ### What this run does and does not tell us
 

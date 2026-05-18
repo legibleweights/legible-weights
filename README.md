@@ -11,8 +11,8 @@ and uses them to trace specific behaviors back to specific weights.
 
 - **Sparse autoencoders** for residual-stream and MLP-output activations across
   small open-weight LLMs (Qwen2.5, Llama 3.2, Gemma 2 at ≤3B parameters).
-  Checkpoints are released on the HuggingFace account
-  [Legiblex](https://huggingface.co/Legiblex).
+  Checkpoints are released under the HuggingFace organization
+  [legible-weights](https://huggingface.co/legible-weights).
 - **Monthly writeups** that pick one concrete model behavior and trace it
   through the dictionary to the specific features (and weights) that cause it.
 - **Tooling** for loading dictionaries, browsing features, and running
