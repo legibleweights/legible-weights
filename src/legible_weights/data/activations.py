@@ -13,6 +13,8 @@ import torch
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+from legible_weights.data.adapters import QWEN_LLAMA, ModelAdapter
+
 
 def load_model(
     model_name: str,
@@ -29,9 +31,12 @@ def load_model(
     return model, tok
 
 
-def _get_decoder_layer(model: torch.nn.Module, idx: int) -> torch.nn.Module:
-    # Works for Qwen2, Llama, Gemma — all use model.model.layers[i]
-    return model.model.layers[idx]
+def _infer_d_model(model: torch.nn.Module) -> int:
+    cfg = model.config
+    for attr in ("hidden_size", "hidden_dim", "n_embd", "d_model"):
+        if hasattr(cfg, attr):
+            return int(getattr(cfg, attr))
+    raise ValueError(f"Could not infer hidden size from config: {cfg}")
 
 
 @torch.no_grad()
@@ -45,6 +50,8 @@ def collect_activations(
     batch_size: int = 8,
     device: str | torch.device = "cuda",
     exclude_first_n: int = 0,
+    adapter: ModelAdapter = QWEN_LLAMA,
+    shuffle: bool = True,
 ) -> torch.Tensor:
     """Stream `texts` through the model, capturing layer_idx residual stream.
 
@@ -55,24 +62,27 @@ def collect_activations(
     treated as padding (not collected). This is the standard workaround for
     transformer attention-sink / outlier-position effects, where the first few
     positions have anomalously high residual-stream norm.
+
+    `adapter` controls model-family-specific behavior (layer access path,
+    output unwrapping, forward signature). Defaults to the Qwen/Llama/Gemma
+    layout for backward compatibility with prior experiments.
     """
-    d_model = model.config.hidden_size
+    d_model = _infer_d_model(model)
     buf = torch.empty((n_tokens, d_model), dtype=torch.float16)
     filled = 0
 
     captured: list[torch.Tensor] = []
 
     def hook(_module, _inputs, outputs):
-        # Decoder layer output is a tuple; element 0 is the hidden states
-        hs = outputs[0] if isinstance(outputs, tuple) else outputs
+        hs = adapter.output_to_hidden(outputs)
         captured.append(hs.detach().to(torch.float16).cpu())
 
-    layer = _get_decoder_layer(model, layer_idx)
+    layer = adapter.get_layer(model, layer_idx)
     handle = layer.register_forward_hook(hook)
 
     try:
         batch: list[str] = []
-        pbar = tqdm(total=n_tokens, desc=f"collect L{layer_idx}", unit="tok")
+        pbar = tqdm(total=n_tokens, desc=f"collect L{layer_idx} [{adapter.name}]", unit="tok")
         for text in texts:
             if filled >= n_tokens:
                 break
@@ -88,7 +98,7 @@ def collect_activations(
                 max_length=seq_len,
             ).to(device)
             captured.clear()
-            model(**enc)
+            adapter.forward(model, dict(enc))
             hs = captured[0]  # (B, L, D)
             mask = enc.attention_mask.cpu().bool().clone()
             if exclude_first_n > 0:
@@ -104,6 +114,7 @@ def collect_activations(
         handle.remove()
 
     buf = buf[:filled]
-    # Shuffle once
-    perm = torch.randperm(buf.shape[0])
-    return buf[perm]
+    if shuffle:
+        perm = torch.randperm(buf.shape[0])
+        buf = buf[perm]
+    return buf

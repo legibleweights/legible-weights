@@ -13,6 +13,8 @@ from dataclasses import dataclass
 import torch
 from tqdm import tqdm
 
+from legible_weights.data.adapters import QWEN_LLAMA, ModelAdapter
+
 
 @dataclass
 class FeatureExample:
@@ -35,6 +37,7 @@ def collect_feature_activations(
     seq_len: int = 256,
     batch_size: int = 8,
     device: str | torch.device = "cuda",
+    adapter: ModelAdapter = QWEN_LLAMA,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Return (acts, token_ids, attn_mask).
 
@@ -45,10 +48,10 @@ def collect_feature_activations(
     captured: list[torch.Tensor] = []
 
     def hook(_module, _inputs, outputs):
-        hs = outputs[0] if isinstance(outputs, tuple) else outputs
+        hs = adapter.output_to_hidden(outputs)
         captured.append(hs.detach())
 
-    handle = model.model.layers[layer_idx].register_forward_hook(hook)
+    handle = adapter.get_layer(model, layer_idx).register_forward_hook(hook)
 
     all_acts: list[torch.Tensor] = []
     all_ids: list[torch.Tensor] = []
@@ -75,7 +78,7 @@ def collect_feature_activations(
                 max_length=seq_len,
             ).to(device)
             captured.clear()
-            model(**enc)
+            adapter.forward(model, dict(enc))
             hs = captured[0]  # (B, L, D)
 
             flat = hs.reshape(-1, hs.size(-1)).to(torch.float32)
