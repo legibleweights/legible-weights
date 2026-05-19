@@ -13,9 +13,11 @@ produced overnight throughput, not magic autonomy.
 **A new "wow" result that bridges two prior projects.** The position-0
 attention-sink register in small open transformers — which
 `outlier-position-anatomy` v0.2 showed is essentially a fixed constant
-vector — can be subtracted directly to build an SAE that **strictly
-Pareto-improves** vanilla TopK on the CE recovery metric across the
-configurations we tested.
+vector — can be subtracted directly to build an SAE that **generally
+improves** vanilla TopK on the CE recovery metric. Win rate across the
+7 configurations we tested: **5 wins (0.3 to 3.9 pts), 1 tie, 1
+regression (−0.4 pts).** Not universally Pareto-better; practitioners
+should A/B test.
 
 `small-sae-bench` v0.3 → v0.4 → v0.4.1 documents this with progressively
 more replication and progressively-refined claims:
@@ -26,21 +28,31 @@ more replication and progressively-refined claims:
 | Qwen2.5-0.5B L9     | 0.974       | **0.983**     | +0.9    | TopK broken at prefix |
 | Qwen2.5-0.5B L15    | 0.944       | **0.967**     | **+2.4** | TopK very broken at prefix (EV −0.47) |
 | GPT-2 small L6      | 0.974       | **0.989**     | **+1.5** | TopK mildly broken |
+| **GPT-2 small L10** | **0.950**   | 0.947         | **−0.4** (regression) | both v0.4.1 conditions hold but RS regresses anyway; possibly because GPT-2's L11 eraser is **attention-head-mediated** |
 | Pythia-1.4B L12     | 0.962       | 0.962         | tied    | TopK not broken, register magnitude moderate |
 | **Pythia-1.4B L22** | 0.895       | **0.934**     | **+3.9**| TopK not broken (EV 0.977) **but register magnitude at peak** |
 
-**The Pythia L22 datapoint is what's interesting.** It refutes the simple
-v0.4 rule "RS gain ~ TopK prefix failure" — at L22, TopK's prefix EV is
-fine (0.977), but RS still gives the biggest CE-recovery gain we've seen.
-The refined v0.4.1 rule is:
+**Two datapoints in this table are the interesting ones:**
 
-> **RS gain over TopK on CE recovery is driven by position-0 residual
-> magnitude × prefix-reconstruction-error gap.** Two cases give big
-> gains: (1) TopK is catastrophic at prefix, or (2) TopK reconstructs OK
-> but residual magnitude is huge so absolute errors propagate.
+- **Pythia L22 (+3.9 pts)**: refutes the simple "RS gain ~ TopK prefix
+  failure" rule. At L22 TopK's prefix EV is fine (0.977) but RS still
+  wins big. The v0.4.1 hypothesis was "RS gain is driven by position-0
+  residual magnitude × prefix-reconstruction-error gap."
+- **GPT-2 L10 (−0.4 pts)**: refutes the v0.4.1 hypothesis. Both
+  conditions are present (peak magnitude + catastrophic TopK prefix) but
+  RS slightly regresses anyway. Possible explanation: GPT-2's L11 eraser
+  is **attention-head-mediated** (head 8 does 77 % per outlier-position-
+  anatomy v0.5), whereas Qwen L21 and Pythia L23 erasers are
+  MLP-mediated — and attention erasers may propagate per-position
+  reconstruction errors in ways MLP erasers don't.
 
-That's a useful selection rule for practitioners deciding when to bother
-switching from TopK to RS.
+**Where this leaves the story**: RS is a *useful but not universal*
+intervention. The mechanistic underpinning from outlier-position-anatomy
+(constant fixed register, write-and-erase circuit) makes the
+intervention *conceptually* sound, but the empirical benefit varies. A
+practitioner deploying SAEs for interpretability should A/B test RS vs
+TopK at their specific (model, layer) rather than assume universal
+improvement.
 
 ## The honest cost
 
@@ -87,14 +99,17 @@ In timestamp order (newest first):
 
 ## Things I noticed but didn't do
 
-- **GPT-2 L10** (just before its L11 eraser) would be the obvious next
-  test of the magnitude rule. Prediction: RS shows a large CE gain there
-  too, similar to Pythia L22. Didn't run because I wanted to ship this
-  summary instead.
+- ~~GPT-2 L10~~ — done after writing the first draft of this summary,
+  result added above. **It surprised me**: predicted a big RS gain,
+  got a tiny regression instead. Story is now more nuanced.
 - **Pythia head-level dissection at L22 / L23** would tell us if Pythia's
   eraser pattern (single MLP) holds at the actually-erasing layer too.
 - **Llama-3.2-1B** is still gated. Unsloth's mirror would work and is the
   obvious blank in the cross-model story.
+- **Test the attention-eraser hypothesis on Qwen's late layers** — Qwen
+  L21 eraser is MLP-mediated. Would predict RS still wins big at Qwen
+  L20 (just before erase), same as Pythia L22. If yes, that's strong
+  support for "MLP eraser → RS works, attention eraser → RS doesn't."
 
 ## Honest framing of novelty
 
