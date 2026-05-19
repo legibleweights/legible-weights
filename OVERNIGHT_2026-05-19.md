@@ -10,17 +10,22 @@ produced overnight throughput, not magic autonomy.
 
 ## The headline
 
-**A new "wow" result that bridges two prior projects.** The position-0
-attention-sink register in small open transformers — which
-`outlier-position-anatomy` v0.2 showed is essentially a fixed constant
-vector — can be subtracted directly to build an SAE that **generally
-improves** vanilla TopK on the CE recovery metric. Win rate across the
-7 configurations we tested: **5 wins (0.3 to 3.9 pts), 1 tie, 1
-regression (−0.4 pts).** Not universally Pareto-better; practitioners
-should A/B test.
+**A new result that bridges two prior projects, with a clean
+mechanism-predicts-engineering payoff.** The position-0 attention-sink
+register in small open transformers — which `outlier-position-anatomy`
+v0.2 showed is essentially a fixed constant vector — can be subtracted
+directly to build an SAE that **generally improves** vanilla TopK on
+the CE recovery metric. Win rate across the **8 configurations** we
+tested: **6 wins (gains 0.3 to +3.9 pts), 1 tie, 1 regression (−0.4
+pts).** And the one regression is *predicted* by `outlier-position-
+anatomy` v0.5's earlier finding that GPT-2's eraser is
+attention-head-mediated while Qwen's and Pythia's are MLP-mediated.
 
-`small-sae-bench` v0.3 → v0.4 → v0.4.1 documents this with progressively
-more replication and progressively-refined claims:
+`small-sae-bench` versioning telegraphs the research process: v0.3 →
+v0.3.1 → v0.4 → v0.4.1 → v0.4.2 → v0.4.3 — each version's claim
+refuted or refined by the next config tested. The final v0.4.3 claim
+landed on a falsifiable rule that the v0.5 mechanistic finding from
+the sister project had already implicitly predicted.
 
 | model · layer       | TopK CE rec | **RS CE rec** | RS gain | Notes |
 |---------------------|:-----------:|:-------------:|:-------:|-------|
