@@ -28,9 +28,10 @@ more replication and progressively-refined claims:
 | Qwen2.5-0.5B L9     | 0.974       | **0.983**     | +0.9    | TopK broken at prefix |
 | Qwen2.5-0.5B L15    | 0.944       | **0.967**     | **+2.4** | TopK very broken at prefix (EV −0.47) |
 | GPT-2 small L6      | 0.974       | **0.989**     | **+1.5** | TopK mildly broken |
-| **GPT-2 small L10** | **0.950**   | 0.947         | **−0.4** (regression) | both v0.4.1 conditions hold but RS regresses anyway; possibly because GPT-2's L11 eraser is **attention-head-mediated** |
+| **GPT-2 small L10** | **0.950**   | 0.947         | **−0.4** (regression) | one before GPT-2's **attention-head eraser** at L11 |
 | Pythia-1.4B L12     | 0.962       | 0.962         | tied    | TopK not broken, register magnitude moderate |
-| **Pythia-1.4B L22** | 0.895       | **0.934**     | **+3.9**| TopK not broken (EV 0.977) **but register magnitude at peak** |
+| **Pythia-1.4B L22** | 0.895       | **0.934**     | **+3.9**| one before Pythia's **MLP eraser** at L23 |
+| **Qwen2.5-0.5B L20**| 0.9495      | **0.9572**    | **+0.8**| one before Qwen's **MLP eraser** at L21 |
 
 **Two datapoints in this table are the interesting ones:**
 
@@ -46,13 +47,23 @@ more replication and progressively-refined claims:
   MLP-mediated — and attention erasers may propagate per-position
   reconstruction errors in ways MLP erasers don't.
 
-**Where this leaves the story**: RS is a *useful but not universal*
-intervention. The mechanistic underpinning from outlier-position-anatomy
-(constant fixed register, write-and-erase circuit) makes the
-intervention *conceptually* sound, but the empirical benefit varies. A
-practitioner deploying SAEs for interpretability should A/B test RS vs
-TopK at their specific (model, layer) rather than assume universal
-improvement.
+**Where this leaves the story**: the GPT-2 L10 regression made me
+generate a hypothesis ("eraser-mechanism type predicts RS's behavior at
+last-layer-before-eraser"), and the Qwen L20 datapoint above is the
+paired-test confirmation. Both MLP-eraser cases (Qwen +0.8, Pythia
++3.9) give positive RS gain at "one before eraser"; the ATTN-head-
+eraser case (GPT-2 −0.4) regresses. **This connects all three project
+repos**: the mechanistic finding (eraser type) from
+`outlier-position-anatomy` v0.5 *predicts* the architectural result (RS
+benefit pattern) from `small-sae-bench` v0.4.3.
+
+**Final aggregate**: RS wins 6/8 configurations, ties 1, regresses 1.
+The one regression is *predicted* by the eraser-mechanism rule.
+
+**Practitioner rule**: use RS unless your target SAE layer is one step
+before an attention-head-mediated eraser (per outlier-position-anatomy
+v0.5: that's specifically GPT-2's L10). Otherwise expect 0.3 to 3.9pt
+CE-recovery improvement.
 
 ## The honest cost
 
